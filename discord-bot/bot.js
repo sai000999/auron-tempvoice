@@ -37,6 +37,32 @@ const client = new Client({
 
 client.commands = new Collection();
 
+// Load slash commands
+const fs = require('fs');
+const path = require('path');
+
+const loadCommands = (dir) => {
+  const files = fs.readdirSync(dir);
+  
+  for (const file of files) {
+    const filePath = path.join(dir, file);
+    const stat = fs.statSync(filePath);
+    
+    if (stat.isDirectory()) {
+      loadCommands(filePath);
+    } else if (file.endsWith('.js')) {
+      const command = require(filePath);
+      if (command.data) {
+        client.commands.set(command.data.name, command);
+      }
+    }
+  }
+};
+
+const commandsPath = path.join(__dirname, 'commands');
+loadCommands(commandsPath);
+console.log(`✅ Loaded ${client.commands.size} slash commands`);
+
 // ==================== UTILITY FUNCTIONS ====================
 
 async function getGuildSettings(guildId) {
@@ -101,6 +127,22 @@ client.once('ready', async () => {
       activities: [{ name: settings.status }],
       status: 'online',
     });
+  }
+});
+
+// Handle slash commands
+client.on('interactionCreate', async (interaction) => {
+  if (!interaction.isCommand()) return;
+  
+  const command = client.commands.get(interaction.commandName);
+  
+  if (!command) return;
+  
+  try {
+    await command.execute(interaction);
+  } catch (error) {
+    console.error(error);
+    await interaction.reply({ content: '❌ There was an error executing this command!', ephemeral: true });
   }
 });
 
