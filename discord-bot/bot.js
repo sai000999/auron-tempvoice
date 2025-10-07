@@ -1,5 +1,5 @@
 /**
- * AURON DISCORD BOT
+ * AURON DISCORD BOT - Temp VC Edition
  * 
  * This bot connects to the same database as your web dashboard.
  * Configure everything through the dashboard at: YOUR_LOVABLE_URL/dashboard
@@ -15,7 +15,7 @@
  */
 
 require('dotenv').config();
-const { Client, GatewayIntentBits, Collection, EmbedBuilder, PermissionFlagsBits } = require('discord.js');
+const { Client, GatewayIntentBits, Collection, EmbedBuilder, PermissionFlagsBits, ChannelType } = require('discord.js');
 const { createClient } = require('@supabase/supabase-js');
 
 // Initialize Supabase client
@@ -28,14 +28,14 @@ const supabase = createClient(
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
-    GatewayIntentBits.GuildMessages,
-    GatewayIntentBits.GuildMembers,
     GatewayIntentBits.GuildVoiceStates,
-    GatewayIntentBits.MessageContent,
   ],
 });
 
 client.commands = new Collection();
+
+// Store active temp VCs: { channelId: ownerId }
+const tempVCs = new Map();
 
 // Load slash commands
 const fs = require('fs');
@@ -65,44 +65,14 @@ console.log(`✅ Loaded ${client.commands.size} slash commands`);
 
 // ==================== UTILITY FUNCTIONS ====================
 
-async function getGuildSettings(guildId) {
+async function getTempVCConfig(guildId) {
   const { data } = await supabase
-    .from('bot_settings')
+    .from('tempvc_config')
     .select('*')
     .eq('guild_id', guildId)
     .single();
   
-  return data || { prefix: '.', status: 'Playing /help', embed_color: '#2b2d31', accent_color: '#ff4040' };
-}
-
-async function getAutomodConfig(guildId) {
-  const { data } = await supabase
-    .from('automod_config')
-    .select('*')
-    .eq('guild_id', guildId)
-    .single();
-  
-  return data || { enabled: false };
-}
-
-async function getWelcomeConfig(guildId) {
-  const { data } = await supabase
-    .from('welcome_config')
-    .select('*')
-    .eq('guild_id', guildId)
-    .single();
-  
-  return data || { enabled: false };
-}
-
-async function getLoggingConfig(guildId) {
-  const { data } = await supabase
-    .from('logging_config')
-    .select('*')
-    .eq('guild_id', guildId)
-    .single();
-  
-  return data || { enabled: false };
+  return data;
 }
 
 function createEmbed(title, description, color = '#2b2d31') {
@@ -111,246 +81,155 @@ function createEmbed(title, description, color = '#2b2d31') {
     .setDescription(description)
     .setColor(color)
     .setTimestamp()
-    .setFooter({ text: 'Auron Bot' });
+    .setFooter({ text: 'Auron Temp VC Bot' });
 }
 
 // ==================== EVENT HANDLERS ====================
 
 client.once('ready', async () => {
   console.log(`✅ ${client.user.tag} is online!`);
-  
-  // Set bot status from first guild's settings (you can customize this)
-  const guild = client.guilds.cache.first();
-  if (guild) {
-    const settings = await getGuildSettings(guild.id);
-    client.user.setPresence({
-      activities: [{ name: settings.status }],
-      status: 'online',
-    });
-  }
+  client.user.setPresence({
+    activities: [{ name: '🎧 Temp VC System' }],
+    status: 'online',
+  });
 });
 
 // Handle slash commands
 client.on('interactionCreate', async (interaction) => {
-  if (!interaction.isCommand()) return;
-  
-  const command = client.commands.get(interaction.commandName);
-  
-  if (!command) return;
-  
-  try {
-    await command.execute(interaction);
-  } catch (error) {
-    console.error(error);
-    await interaction.reply({ content: '❌ There was an error executing this command!', ephemeral: true });
-  }
-});
-
-// Welcome System
-client.on('guildMemberAdd', async (member) => {
-  const config = await getWelcomeConfig(member.guild.id);
-  
-  if (!config.enabled) return;
-  
-  const channel = member.guild.channels.cache.get(config.channel_id);
-  
-  // Auto-role
-  if (config.join_role_id) {
-    const role = member.guild.roles.cache.get(config.join_role_id);
-    if (role) {
-      await member.roles.add(role).catch(console.error);
-    }
-  }
-  
-  // Auto decancer
-  if (config.auto_decancer && member.displayName.match(/[^\x00-\x7F]/)) {
-    await member.setNickname('Renamed User').catch(console.error);
-  }
-  
-  // Send welcome message
-  if (channel) {
-    let message = config.message.replace('{user}', `<@${member.id}>`);
+  if (interaction.isCommand()) {
+    const command = client.commands.get(interaction.commandName);
     
-    if (config.embed_enabled) {
-      const embed = createEmbed(
-        config.embed_title,
-        config.embed_description.replace('{user}', `<@${member.id}>`),
-        config.embed_color
-      );
-      await channel.send({ embeds: [embed] });
-    } else {
-      await channel.send(message);
-    }
-  }
-  
-  // Send DM
-  if (config.dm_enabled && config.dm_message) {
-    await member.send(config.dm_message).catch(console.error);
-  }
-});
-
-// Automod System
-client.on('messageCreate', async (message) => {
-  if (message.author.bot || !message.guild) return;
-  
-  const config = await getAutomodConfig(message.guild.id);
-  
-  if (!config.enabled) return;
-  
-  // Check for spam (simple detection)
-  if (config.spam_detection) {
-    const recentMessages = message.channel.messages.cache
-      .filter(m => m.author.id === message.author.id && Date.now() - m.createdTimestamp < 5000)
-      .size;
+    if (!command) return;
     
-    if (recentMessages > 5) {
-      await message.member.timeout(config.spam_timeout_duration * 1000, 'Spam detected');
-      const embed = createEmbed('⚠️ Auto-Timeout', `${message.author} was timed out for spamming`, '#ff4040');
-      await message.channel.send({ embeds: [embed] });
-      return;
+    try {
+      await command.execute(interaction);
+    } catch (error) {
+      console.error(error);
+      await interaction.reply({ content: '❌ There was an error executing this command!', flags: 64 });
     }
   }
   
-  // Check mass mentions
-  if (message.mentions.users.size > config.mass_mention_limit) {
-    await message.delete();
-    await message.member.timeout(config.spam_timeout_duration * 1000, 'Mass mention');
-    return;
-  }
-  
-  // Check blacklisted words
-  const { data: blacklist } = await supabase
-    .from('blacklisted_words')
-    .select('word')
-    .eq('guild_id', message.guild.id);
-  
-  if (blacklist) {
-    const content = message.content.toLowerCase();
-    for (const item of blacklist) {
-      if (content.includes(item.word)) {
-        await message.delete();
-        const embed = createEmbed('🚫 Blacklisted Word', 'Your message contained a blacklisted word', '#ff4040');
-        await message.author.send({ embeds: [embed] }).catch(console.error);
-        return;
+  // Handle button interactions for VC controls
+  if (interaction.isButton()) {
+    const ownerId = tempVCs.get(interaction.member.voice.channelId);
+    
+    if (!ownerId) {
+      return interaction.reply({ content: '❌ You must be in a temporary voice channel to use this!', flags: 64 });
+    }
+    
+    if (ownerId !== interaction.user.id && !interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
+      return interaction.reply({ content: '❌ Only the channel owner can use this!', flags: 64 });
+    }
+    
+    const voiceChannel = interaction.member.voice.channel;
+    
+    try {
+      switch (interaction.customId) {
+        case 'vc_lock':
+          await voiceChannel.permissionOverwrites.edit(interaction.guild.roles.everyone, {
+            Connect: false
+          });
+          await interaction.reply({ content: '🔒 Voice channel locked!', flags: 64 });
+          break;
+          
+        case 'vc_unlock':
+          await voiceChannel.permissionOverwrites.edit(interaction.guild.roles.everyone, {
+            Connect: true
+          });
+          await interaction.reply({ content: '🔓 Voice channel unlocked!', flags: 64 });
+          break;
+          
+        case 'vc_hide':
+          await voiceChannel.permissionOverwrites.edit(interaction.guild.roles.everyone, {
+            ViewChannel: false
+          });
+          await interaction.reply({ content: '🙈 Voice channel hidden!', flags: 64 });
+          break;
+          
+        case 'vc_unhide':
+          await voiceChannel.permissionOverwrites.edit(interaction.guild.roles.everyone, {
+            ViewChannel: true
+          });
+          await interaction.reply({ content: '👀 Voice channel visible!', flags: 64 });
+          break;
+          
+        case 'vc_delete':
+          await interaction.reply({ content: '🗑️ Deleting channel...', flags: 64 });
+          tempVCs.delete(voiceChannel.id);
+          await voiceChannel.delete();
+          break;
+          
+        case 'vc_claim':
+          if (ownerId) {
+            const owner = await interaction.guild.members.fetch(ownerId).catch(() => null);
+            if (owner && voiceChannel.members.has(ownerId)) {
+              return interaction.reply({ content: '❌ The current owner is still in the channel!', flags: 64 });
+            }
+          }
+          tempVCs.set(voiceChannel.id, interaction.user.id);
+          await interaction.reply({ content: '🏆 You are now the channel owner!', flags: 64 });
+          break;
       }
+    } catch (error) {
+      console.error(error);
+      await interaction.reply({ content: '❌ Failed to perform action!', flags: 64 });
     }
   }
 });
 
-// Logging System
-client.on('messageDelete', async (message) => {
-  if (message.author?.bot) return;
+// Temp VC System
+client.on('voiceStateUpdate', async (oldState, newState) => {
+  const config = await getTempVCConfig(newState.guild.id);
   
-  const config = await getLoggingConfig(message.guild.id);
-  if (!config.enabled || !config.message_logs_channel) return;
+  if (!config || !config.enabled) return;
   
-  const channel = message.guild.channels.cache.get(config.message_logs_channel);
-  if (!channel) return;
-  
-  const embed = createEmbed(
-    '🗑️ Message Deleted',
-    `**Author:** ${message.author}\n**Channel:** ${message.channel}\n**Content:** ${message.content || 'No content'}`,
-    '#ff4040'
-  );
-  
-  await channel.send({ embeds: [embed] });
-});
-
-client.on('messageUpdate', async (oldMessage, newMessage) => {
-  if (oldMessage.author?.bot || oldMessage.content === newMessage.content) return;
-  
-  const config = await getLoggingConfig(oldMessage.guild.id);
-  if (!config.enabled || !config.message_logs_channel) return;
-  
-  const channel = oldMessage.guild.channels.cache.get(config.message_logs_channel);
-  if (!channel) return;
-  
-  const embed = createEmbed(
-    '✏️ Message Edited',
-    `**Author:** ${oldMessage.author}\n**Channel:** ${oldMessage.channel}\n**Before:** ${oldMessage.content}\n**After:** ${newMessage.content}`,
-    '#f9d342'
-  );
-  
-  await channel.send({ embeds: [embed] });
-});
-
-client.on('guildMemberAdd', async (member) => {
-  const config = await getLoggingConfig(member.guild.id);
-  if (!config.enabled || !config.server_logs_channel) return;
-  
-  const channel = member.guild.channels.cache.get(config.server_logs_channel);
-  if (!channel) return;
-  
-  const embed = createEmbed(
-    '👋 Member Joined',
-    `${member.user.tag} joined the server`,
-    '#43b581'
-  );
-  
-  await channel.send({ embeds: [embed] });
-});
-
-// ==================== PREFIX COMMANDS ====================
-
-client.on('messageCreate', async (message) => {
-  if (message.author.bot || !message.guild) return;
-  
-  const settings = await getGuildSettings(message.guild.id);
-  const prefix = settings.prefix;
-  
-  if (!message.content.startsWith(prefix)) return;
-  
-  const args = message.content.slice(prefix.length).trim().split(/ +/);
-  const commandName = args.shift().toLowerCase();
-  
-  // Moderation Commands
-  if (commandName === 'ban') {
-    if (!message.member.permissions.has(PermissionFlagsBits.BanMembers)) {
-      return message.reply('❌ You need Ban Members permission');
+  // User joined the create channel
+  if (newState.channelId === config.create_vc_channel_id && oldState.channelId !== newState.channelId) {
+    try {
+      const category = newState.guild.channels.cache.get(config.category_id);
+      
+      const tempChannel = await newState.guild.channels.create({
+        name: `${newState.member.user.username}'s VC`,
+        type: ChannelType.GuildVoice,
+        parent: category?.id,
+        userLimit: 0
+      });
+      
+      // Store the owner
+      tempVCs.set(tempChannel.id, newState.member.id);
+      
+      // Move user to new channel
+      await newState.member.voice.setChannel(tempChannel);
+      
+      // Send control panel DM
+      const embed = createEmbed(
+        '🎛️ Voice Channel Created',
+        `Your temporary voice channel has been created!\nGo to the VC Interface channel to control it.`
+      );
+      
+      await newState.member.send({ embeds: [embed] }).catch(() => {});
+      
+      // Auto-delete timer
+      if (config.auto_delete_timeout) {
+        setTimeout(async () => {
+          if (tempChannel.members.size === 0) {
+            tempVCs.delete(tempChannel.id);
+            await tempChannel.delete().catch(console.error);
+          }
+        }, config.auto_delete_timeout * 1000);
+      }
+      
+    } catch (error) {
+      console.error('Error creating temp VC:', error);
     }
-    
-    const user = message.mentions.users.first();
-    const reason = args.slice(1).join(' ') || 'No reason provided';
-    
-    if (!user) return message.reply('❌ Please mention a user to ban');
-    
-    await message.guild.members.ban(user, { reason });
-    
-    const embed = createEmbed('🔨 Member Banned', `${user.tag} has been banned\n**Reason:** ${reason}`, settings.accent_color);
-    await message.reply({ embeds: [embed] });
   }
   
-  if (commandName === 'kick') {
-    if (!message.member.permissions.has(PermissionFlagsBits.KickMembers)) {
-      return message.reply('❌ You need Kick Members permission');
+  // Auto-delete empty temp VCs
+  if (oldState.channel && tempVCs.has(oldState.channelId)) {
+    if (oldState.channel.members.size === 0) {
+      tempVCs.delete(oldState.channelId);
+      await oldState.channel.delete().catch(console.error);
     }
-    
-    const member = message.mentions.members.first();
-    const reason = args.slice(1).join(' ') || 'No reason provided';
-    
-    if (!member) return message.reply('❌ Please mention a member to kick');
-    
-    await member.kick(reason);
-    
-    const embed = createEmbed('👢 Member Kicked', `${member.user.tag} has been kicked\n**Reason:** ${reason}`, settings.accent_color);
-    await message.reply({ embeds: [embed] });
-  }
-  
-  if (commandName === 'timeout') {
-    if (!message.member.permissions.has(PermissionFlagsBits.ModerateMembers)) {
-      return message.reply('❌ You need Moderate Members permission');
-    }
-    
-    const member = message.mentions.members.first();
-    const duration = parseInt(args[1]) || 10;
-    const reason = args.slice(2).join(' ') || 'No reason provided';
-    
-    if (!member) return message.reply('❌ Please mention a member to timeout');
-    
-    await member.timeout(duration * 60 * 1000, reason);
-    
-    const embed = createEmbed('⏰ Member Timed Out', `${member.user.tag} has been timed out for ${duration} minutes\n**Reason:** ${reason}`, settings.accent_color);
-    await message.reply({ embeds: [embed] });
   }
 });
 
