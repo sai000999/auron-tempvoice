@@ -19,7 +19,10 @@ Create a `.env` file (copy from `.env.example`):
 DISCORD_TOKEN=your_bot_token
 DISCORD_CLIENT_ID=your_client_id
 SUPABASE_URL=https://dknfsmfsclbjhqjzmezq.supabase.co
-SUPABASE_KEY=your_supabase_key
+# Prefer this on servers (bypasses RLS safely)
+SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
+# Fallback if you don't have service role
+SUPABASE_KEY=your_supabase_anon_key
 ```
 
 **Where to get these:**

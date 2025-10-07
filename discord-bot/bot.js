@@ -15,10 +15,11 @@
  */
 
 require('dotenv').config();
-const requiredEnv = ['DISCORD_TOKEN', 'SUPABASE_URL', 'SUPABASE_KEY'];
-const missing = requiredEnv.filter((k) => !process.env[k]);
-if (missing.length) {
-  console.error('Missing environment variables:', missing.join(', '), '- set them in discord-bot/.env');
+const requiredEnv = ['DISCORD_TOKEN', 'SUPABASE_URL'];
+const hasService = !!process.env.SUPABASE_SERVICE_ROLE_KEY;
+const hasAnon = !!process.env.SUPABASE_KEY;
+if (!hasService && !hasAnon) {
+  console.error('Missing SUPABASE_SERVICE_ROLE_KEY (preferred) or SUPABASE_KEY - set them in discord-bot/.env');
   process.exit(1);
 }
 const { Client, GatewayIntentBits, Collection, EmbedBuilder, PermissionFlagsBits, ChannelType } = require('discord.js');
@@ -27,7 +28,7 @@ const { createClient } = require('@supabase/supabase-js');
 // Initialize Supabase client
 const supabase = createClient(
   process.env.SUPABASE_URL,
-  process.env.SUPABASE_KEY
+  process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_KEY
 );
 
 // Initialize Discord client
