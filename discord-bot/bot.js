@@ -15,6 +15,12 @@
  */
 
 require('dotenv').config();
+const requiredEnv = ['DISCORD_TOKEN', 'SUPABASE_URL', 'SUPABASE_KEY'];
+const missing = requiredEnv.filter((k) => !process.env[k]);
+if (missing.length) {
+  console.error('Missing environment variables:', missing.join(', '), '- set them in discord-bot/.env');
+  process.exit(1);
+}
 const { Client, GatewayIntentBits, Collection, EmbedBuilder, PermissionFlagsBits, ChannelType } = require('discord.js');
 const { createClient } = require('@supabase/supabase-js');
 
@@ -66,13 +72,15 @@ console.log(`✅ Loaded ${client.commands.size} slash commands`);
 // ==================== UTILITY FUNCTIONS ====================
 
 async function getTempVCConfig(guildId) {
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from('tempvc_config')
     .select('*')
     .eq('guild_id', guildId)
     .maybeSingle();
-  
-  return data;
+  if (error) {
+    console.error('Supabase getTempVCConfig error:', error.message);
+  }
+  return data || null;
 }
 
 function createEmbed(title, description, color = '#2b2d31') {

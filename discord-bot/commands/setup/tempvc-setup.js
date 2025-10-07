@@ -32,7 +32,7 @@ module.exports = {
     });
     
     // Save to database
-    await supabase
+    const { error } = await supabase
       .from('tempvc_config')
       .upsert({
         guild_id: interaction.guild.id,
@@ -41,6 +41,10 @@ module.exports = {
         interface_channel_id: textChannel.id,
         enabled: true
       });
+    if (error) {
+      console.error('TempVC setup save error:', error.message);
+      return interaction.reply({ content: `❌ Failed to save config: ${error.message}`, flags: 64 });
+    }
     
     // Send management embed
     const embed = new EmbedBuilder()
