@@ -70,7 +70,7 @@ async function getTempVCConfig(guildId) {
     .from('tempvc_config')
     .select('*')
     .eq('guild_id', guildId)
-    .single();
+    .maybeSingle();
   
   return data;
 }

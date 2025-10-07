@@ -37,7 +37,7 @@ module.exports = {
       .upsert({
         guild_id: interaction.guild.id,
         category_id: category.id,
-        create_channel_id: voiceChannel.id,
+        create_vc_channel_id: voiceChannel.id,
         interface_channel_id: textChannel.id,
         enabled: true
       });
@@ -74,6 +74,6 @@ module.exports = {
     
     await textChannel.send({ embeds: [embed], components: [row1, row2, row3] });
     
-    await interaction.reply({ content: '✅ Temp VC system setup complete!', ephemeral: true });
+    await interaction.reply({ content: '✅ Temp VC system setup complete!', flags: 64 });
   },
 };
