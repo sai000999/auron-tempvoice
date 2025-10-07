@@ -181,10 +181,18 @@ client.on('interactionCreate', async (interaction) => {
 client.on('voiceStateUpdate', async (oldState, newState) => {
   const config = await getTempVCConfig(newState.guild.id);
   
-  if (!config || !config.enabled) return;
+  console.log('Voice state update detected');
+  console.log('Config:', config);
+  
+  if (!config || !config.enabled) {
+    console.log('Config not enabled or not found');
+    return;
+  }
   
   // User joined the create channel
+  console.log('Checking if user joined create channel:', newState.channelId, 'vs', config.create_vc_channel_id);
   if (newState.channelId === config.create_vc_channel_id && oldState.channelId !== newState.channelId) {
+    console.log('User joined create channel! Creating temp VC...');
     try {
       const category = newState.guild.channels.cache.get(config.category_id);
       
@@ -195,11 +203,15 @@ client.on('voiceStateUpdate', async (oldState, newState) => {
         userLimit: 0
       });
       
+      console.log('Temp VC created:', tempChannel.name);
+      
       // Store the owner
       tempVCs.set(tempChannel.id, newState.member.id);
       
       // Move user to new channel
       await newState.member.voice.setChannel(tempChannel);
+      
+      console.log('User moved to temp VC');
       
       // Send control panel DM
       const embed = createEmbed(
