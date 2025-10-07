@@ -54,8 +54,8 @@ module.exports = {
       .addComponents(
         new ButtonBuilder().setCustomId('vc_lock').setLabel('Lock VC').setStyle(ButtonStyle.Secondary).setEmoji('🔒'),
         new ButtonBuilder().setCustomId('vc_unlock').setLabel('Unlock VC').setStyle(ButtonStyle.Secondary).setEmoji('🔓'),
-        new ButtonBuilder().setCustomId('vc_hide').setLabel('Hide VC').setStyle(ButtonStyle.Secondary).setEmoji('👁️'),
-        new ButtonBuilder().setCustomId('vc_unhide').setLabel('Unhide VC').setStyle(ButtonStyle.Secondary).setEmoji('👁️‍🗨️')
+        new ButtonBuilder().setCustomId('vc_hide').setLabel('Hide VC').setStyle(ButtonStyle.Secondary).setEmoji('🙈'),
+        new ButtonBuilder().setCustomId('vc_unhide').setLabel('Unhide VC').setStyle(ButtonStyle.Secondary).setEmoji('👀')
       );
     
     const row2 = new ActionRowBuilder()
